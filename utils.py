@@ -7,10 +7,15 @@ import tkinter as tk
 image_pairs = {
     'Choose a pair': (),
     'Pair 1': ('./images/left_1.png', './images/right_1.png'),
-    'Pair 2': ('./images/left_2.png', './images/right_2.png'),
-    'Pair 3': ('./images/left_3.png', './images/right_3.png'),
-    'Pair 4': ('./images/left_4.png', './images/right_4.png'),
-    'Pair 5': ('./images/left_5.png', './images/right_5.png'),
+    'Pair 2': ('./images/left_2.jpg', './images/right_2.jpg'),
+    'Pair 3': ('./images/left_3.jpg', './images/right_3.jpg'),
+    'Pair 4': ('./images/left_4.jpg', './images/right_4.jpg'),
+    'Pair 5': ('./images/left_5.jpg', './images/right_5.jpg'),
+    'Pair 6': ('./images/left_6.jpg', './images/right_6.jpg'),
+    'Pair 7': ('./images/left_7.jpg', './images/right_7.jpg'),
+    'Pair 8': ('./images/left_8.jpg', './images/right_8.jpg'),
+    'Pair 9': ('./images/left_9.jpg', './images/right_9.jpg'),
+    'Pair 10': ('./images/left_10.jpg', './images/right_10.jpg'),
 }
 
 def combine_images(images, scale_factor=1.0):

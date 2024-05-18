@@ -72,7 +72,7 @@ class FeatureDetectionUI:
 
         for path in image_paths:
             # Create ImageProcessor instances for each image in the pair
-            processor = ImageProcessor(path, scale_factor=0.7)  # Adjust scale_factor as needed
+            processor = ImageProcessor(path, scale_factor=0.5)  # Adjust scale_factor as needed
             self.image_processors.append(processor)
 
         # Display the loaded images side by side
