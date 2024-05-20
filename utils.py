@@ -4,6 +4,7 @@
 from PIL import Image
 import tkinter as tk
 
+# Predefined pairs of images for easy selection and loading.
 image_pairs = {
     'Choose a pair': (),
     'Pair 1': ('./images/left_1.png', './images/right_1.png'),
@@ -19,7 +20,17 @@ image_pairs = {
 }
 
 def combine_images(images, scale_factor=1.0):
-    """Combine images side by side with an optional scale factor."""
+    """
+    Combine images side by side with an optional scale factor.
+
+    Parameters:
+    images (list): A list of PIL.Image objects.
+    scale_factor (float): A factor by which each image is scaled before combining.
+
+    Returns:
+        Image: A new PIL Image object containing all the input images combined side by side.
+    """
+
     if scale_factor != 1.0:
         images = [i.resize((int(i.width * scale_factor), int(i.height * scale_factor)), Image.Resampling.LANCZOS)
                   for i in images]
@@ -34,7 +45,19 @@ def combine_images(images, scale_factor=1.0):
 
 
 def create_selection_popup(root, title, options, variable, callback):
-    """Create a popup window for selecting options such as detection methods."""
+    """
+    Creates a popup window with radio button options for selection.
+
+    Parameters:
+        root (tk.Tk): The root window for the popup.
+        title (str): The title of the popup window.
+        options (dict): A dictionary of option text linked to methods.
+        variable (tk.Variable): A tkinter variable that binds with radio buttons.
+        callback (function): The function to call when the OK button is pressed.
+
+    Returns:
+        tk.Toplevel: The popup window that was created.
+    """
     popup = tk.Toplevel(root)
     popup.title(title)
 

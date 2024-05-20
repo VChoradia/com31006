@@ -7,20 +7,37 @@ from tkinter import ttk
 import numpy as np
 from PIL import Image, ImageTk
 from utils import image_pairs
-from ImageProcessor import ImageProcessor
+from ImageProcessor import ImageProcessor, stitch_images
 import time
 
 
 class FeatureDetectionUI:
+    """
+        A GUI application for feature detection and image stitching.
+
+        Attributes:
+            root (tk.Tk): The main window of the application.
+            image_processors (list): A list of ImageProcessor instances for image operations.
+            selected_option (tk.StringVar): String variable to display the selected option in the GUI.
+        """
+
     def __init__(self, root):
+        """
+        Initializes the FeatureDetectionUI class with the main Tkinter root window.
+
+        Parameters:
+            root (tk.Tk): The main window of the application.
+        """
+
         self.root = root
         self.image_processors = []  # Store ImageProcessor instances for each image
         self.selected_option = tk.StringVar()  # To display the currently selected option
         self.setup_ui()
 
     def setup_ui(self):
-        self.root.title("Feature Detection and Image Stitching")
+        """Sets up the user interface for the application."""
 
+        self.root.title("Feature Detection and Image Stitching")
         self.root.state('zoomed')
 
         # Main container
@@ -62,6 +79,12 @@ class FeatureDetectionUI:
         self.image_label.pack()
 
     def load_selected_pair(self, event=None):
+        """
+        Loads the selected image pair for processing.
+
+        Parameters:
+            event (Event, optional): The event triggered by selecting an image pair from the dropdown.
+        """
 
         self.image_processors = []  # Clear the previous ImageProcessor instances
 
@@ -80,6 +103,8 @@ class FeatureDetectionUI:
         self.setup_options()
 
     def setup_options(self):
+        """Sets up interactive buttons for various image processing options in the GUI."""
+
         for widget in self.option_frame.winfo_children():
             widget.destroy()
 
@@ -113,6 +138,7 @@ class FeatureDetectionUI:
                   command=lambda: self.select_option('Stitch Images')).pack(anchor=tk.W, padx=20, pady=5)
 
     def display_images(self):
+        """Displays the loaded images on the GUI."""
 
         scale_factor = 0.5
         images = [processor.get_pil_image() for processor in self.image_processors]
@@ -128,12 +154,25 @@ class FeatureDetectionUI:
         self.display_image(combined_image)
 
     def display_image(self, image):
-        # Convert PIL Image to ImageTk and display it
+        """
+        Helper function to display an image in the GUI.
+
+        Parameters:
+            image (Image): The image to be displayed.
+        """
+
         image_tk = ImageTk.PhotoImage(image)
         self.image_label.config(image=image_tk)
         self.image_label.image = image_tk
 
     def select_option(self, option):
+        """
+        Handles option selection from the GUI and triggers appropriate methods.
+
+        Parameters:
+            option (str): The selected operation to perform on the images.
+        """
+
         self.selected_option.set(f"Selected Option: \n {option}")
         if 'Detection' in option:
             method = option.split()[0]
@@ -149,6 +188,13 @@ class FeatureDetectionUI:
             self.stitch_images()
 
     def detect_features(self, method):
+        """
+        Applies feature detection algorithms based on the selected method.
+
+        Parameters:
+            method (str): The method of feature detection to apply ('Harris' or 'SIFT').
+        """
+
         self.load_selected_pair()
         for processor in self.image_processors:
             if method == 'Harris':
@@ -158,6 +204,13 @@ class FeatureDetectionUI:
         self.display_images()
 
     def describe_features(self, method):
+        """
+        Describes features using the specified method.
+
+        Parameters:
+            method (str): The method of feature description to apply ('SIFT' or 'ORB').
+        """
+
         self.load_selected_pair()
         for processor in self.image_processors:
             if method == 'SIFT':
@@ -168,6 +221,13 @@ class FeatureDetectionUI:
         print(f"Generated descriptors shape: {descriptors.shape}")
 
     def match_features(self, descriptor):
+        """
+        Matches features between two images using the specified descriptor.
+
+        Parameters:
+            descriptor (str): The descriptor to use for feature matching ('sift' or 'orb').
+        """
+
         self.load_selected_pair()
 
         if len(self.image_processors) != 2:
@@ -217,6 +277,11 @@ class FeatureDetectionUI:
             f"Matching Accuracy = {matching_accuracy:.2f}, Computational Time = {computational_time:.2f} s")
 
     def stitch_images(self):
+        """
+        Stitches two images together using features matched between them.
+
+        Uses SIFT features and RANSAC for homography estimation followed by image warping and stitching.
+        """
 
         self.load_selected_pair()
         if len(self.image_processors) != 2:
@@ -237,39 +302,13 @@ class FeatureDetectionUI:
             print("Feature matching did not return valid matches.")
             return
 
-        matched_image, matches, matching_accuracy, computational_time = match_result
+        _, matches, _, _ = match_result
         if not matches:
             print("No matches to process.")
             return
 
-        # Extract location of good matches
-        points1 = np.zeros((len(matches), 2), dtype=np.float32)
-        points2 = np.zeros((len(matches), 2), dtype=np.float32)
-
-        for i, match in enumerate(matches):
-            points1[i, :] = processor1.keypoints[match.queryIdx].pt
-            points2[i, :] = processor2.keypoints[match.trainIdx].pt
-
-        # Compute homography matrix using RANSAC
-        H, _ = cv2.findHomography(points2, points1, cv2.RANSAC)
-        if H is None:
-            print("Homography could not be computed.")
-            return
-
-        # Warp and stitch images
-        height, width, channels = processor1.image.shape
-        warped_image = cv2.warpPerspective(processor2.image, H, (width + processor2.image.shape[1], height))
-        stitched_image = np.copy(warped_image)
-        stitched_image[0:height, 0:width] = processor1.image
-
-        # Resize stitched image
-        display_width = 600
-        aspect_ratio = display_width / float(stitched_image.shape[1])
-        display_height = int(stitched_image.shape[0] * aspect_ratio)
-        resized_image = cv2.resize(stitched_image, (display_width, display_height), interpolation=cv2.INTER_AREA)
-
-        # Convert to PIL Image and display
-        stitched_image_pil = Image.fromarray(cv2.cvtColor(resized_image, cv2.COLOR_BGR2RGB))
+        stitched_image = stitch_images(processor1, processor2, matches)
+        stitched_image_pil = Image.fromarray(cv2.cvtColor(stitched_image, cv2.COLOR_BGR2RGB))
 
         pair_name = self.selected_pair.get()
         stitched_image_pil.save(f"./output/{pair_name}_stitched.png")
