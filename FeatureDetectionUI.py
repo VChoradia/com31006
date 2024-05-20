@@ -21,7 +21,6 @@ class FeatureDetectionUI:
     def setup_ui(self):
         self.root.title("Feature Detection and Image Stitching")
 
-        # Maximize the window on startup
         self.root.state('zoomed')
 
         # Main container
@@ -63,22 +62,21 @@ class FeatureDetectionUI:
         self.image_label.pack()
 
     def load_selected_pair(self, event=None):
-        # Clear the previous ImageProcessor instances
-        self.image_processors = []
 
-        # Load the new image pair based on the selection
+        self.image_processors = []  # Clear the previous ImageProcessor instances
+
         pair_name = self.selected_pair.get()
         image_paths = image_pairs[pair_name]
 
         for path in image_paths:
-            # Create ImageProcessor instances for each image in the pair
-            processor = ImageProcessor(path, scale_factor=0.5)  # Adjust scale_factor as needed
+            if event is not None:
+                processor = ImageProcessor(path)
+            else:
+                processor = ImageProcessor(path, scale_factor=0.5)
             self.image_processors.append(processor)
 
-        # Display the loaded images side by side
         self.display_images()
 
-        # Set up the options in the sidebar once images are loaded
         self.setup_options()
 
     def setup_options(self):
@@ -101,19 +99,22 @@ class FeatureDetectionUI:
         tk.Button(self.option_frame, text='ORB', width=button_width,
                   command=lambda: self.select_option('ORB Description')).pack(anchor=tk.W, padx=20, pady=5)
 
-        # Feature Matching Option
-        tk.Label(self.option_frame, text="3. Feature Matching", bg='lightgrey').pack(anchor=tk.W, padx=10)
-        tk.Button(self.option_frame, text='Match Features', width=button_width,
-                  command=lambda: self.select_option('Feature Matching')).pack(anchor=tk.W, padx=20, pady=5)
+        # Adding buttons for SIFT and ORB matching options
+        tk.Label(self.option_frame, text="3. Feature Matching Options", bg='lightgrey').pack(anchor=tk.W,
+                                                                                                        padx=10)
+        tk.Button(self.option_frame, text='Match using SIFT', width=button_width,
+                  command=lambda: self.select_option('Match using SIFT')).pack(anchor=tk.W, padx=20, pady=5)
+        tk.Button(self.option_frame, text='Match using ORB', width=button_width,
+                  command=lambda: self.select_option('Match using ORB')).pack(anchor=tk.W, padx=20, pady=5)
 
         # Image Stitching Option
         tk.Label(self.option_frame, text="4. Image Stitching", bg='lightgrey').pack(anchor=tk.W, padx=10)
         tk.Button(self.option_frame, text='Stitch Images', width=button_width,
-                  command=lambda: self.select_option('Image Stitching')).pack(anchor=tk.W, padx=20, pady=5)
+                  command=lambda: self.select_option('Stitch Images')).pack(anchor=tk.W, padx=20, pady=5)
 
     def display_images(self):
-        # Combine images side by side with scaling
-        scale_factor = 0.7  # Adjust scale factor as needed
+
+        scale_factor = 0.5
         images = [processor.get_pil_image() for processor in self.image_processors]
         images = [i.resize((int(i.width * scale_factor), int(i.height * scale_factor)), Image.Resampling.LANCZOS) for i
                   in images]
@@ -133,20 +134,19 @@ class FeatureDetectionUI:
         self.image_label.image = image_tk
 
     def select_option(self, option):
-        try:
-            self.selected_option.set(f"Selected Option: \n {option}")
-            if 'Detection' in option:
-                method = option.split()[0]
-                self.detect_features(method)
-            elif 'Description' in option:
-                method = option.split()[0]
-                self.describe_features(method)
-            elif option == 'Feature Matching':
-                self.match_features()
-            elif option == 'Image Stitching':
-                self.stitch_images()
-        except ValueError as e:
-            tk.messagebox.showerror("Error", str(e))
+        self.selected_option.set(f"Selected Option: \n {option}")
+        if 'Detection' in option:
+            method = option.split()[0]
+            self.detect_features(method)
+        elif 'Description' in option:
+            method = option.split()[0]
+            self.describe_features(method)
+        elif 'Match using SIFT' in option:
+            self.match_features(descriptor="sift")
+        elif 'Match using ORB' in option:
+            self.match_features(descriptor="orb")
+        elif 'Stitch Images' in option:
+            self.stitch_images()
 
     def detect_features(self, method):
         self.load_selected_pair()
@@ -154,20 +154,21 @@ class FeatureDetectionUI:
             if method == 'Harris':
                 processor.apply_harris_corners()
             elif method == 'SIFT':
-                processor.apply_sift_features()
+                keypoints, descriptors, time_taken = processor.apply_sift_features()
         self.display_images()
 
     def describe_features(self, method):
         self.load_selected_pair()
         for processor in self.image_processors:
             if method == 'SIFT':
-                keypoints, descriptors = processor.apply_sift_features()
+                keypoints, descriptors, time_taken = processor.apply_sift_features()
             elif method == 'ORB':
-                keypoints, descriptors = processor.apply_orb_features()
+                keypoints, descriptors, time_taken = processor.apply_orb_features()
         self.display_images()
+        print(f"Generated descriptors shape: {descriptors.shape}")
 
-    def match_features(self):
-        self.load_selected_pair()  # Ensure images are loaded
+    def match_features(self, descriptor):
+        self.load_selected_pair()
 
         if len(self.image_processors) != 2:
             print("A valid image pair must contain exactly two images.")
@@ -175,16 +176,19 @@ class FeatureDetectionUI:
 
         processor1, processor2 = self.image_processors
 
-        # Ensure keypoints and descriptors are computed for both images
-        if not processor1.keypoints or not processor1.descriptors:
-            processor1.apply_sift_features()  # or apply_harris_corners() or another method based on your setup
+        if descriptor == "sift":
+            if not processor1.keypoints or not processor1.descriptors:
+                processor1.apply_sift_features(match=True)
 
-        if not processor2.keypoints or not processor2.descriptors:
-            processor2.apply_sift_features()  # or apply_harris_corners() or another method based on your setup
+            if not processor2.keypoints or not processor2.descriptors:
+                processor2.apply_sift_features(match=True)
 
-        # Now proceed with matching
-        matches_img_ssd, num_matches_ssd, matching_accuracy_ssd, computational_time_ssd = processor1.match_features_ssd(
-            processor2)
+        else:  # ORB
+            if not processor1.keypoints or not processor1.descriptors:
+                processor1.apply_orb_features(match=True)
+
+            if not processor2.keypoints or not processor2.descriptors:
+                processor2.apply_orb_features(match=True)
 
         def resize_image(image, width):
             aspect_ratio = width / float(image.shape[1])
@@ -194,30 +198,26 @@ class FeatureDetectionUI:
         processor1.image = resize_image(processor1.image, 600)
         processor2.image = resize_image(processor2.image, 600)
 
-        # Match features using SSD
-        matches_img_ssd, num_matches_ssd, matching_accuracy_ssd, computational_time_ssd = processor1.match_features_ssd(
+        matches_img, matches, matching_accuracy, computational_time = processor1.match_features(
             processor2)
 
-        # Match features using Ratio Test
-        matches_img_ratio, num_matches_ratio, matching_accuracy_ratio, computational_time_ratio = processor1.match_features_ratio(
-            processor2)
-
-        # Display SSD matches
-        matches_img_ssd_pil = Image.fromarray(cv2.cvtColor(matches_img_ssd, cv2.COLOR_BGR2RGB))
+        # Display matches
+        matches_img_ssd_pil = Image.fromarray(cv2.cvtColor(matches_img, cv2.COLOR_BGR2RGB))
         self.display_image(matches_img_ssd_pil)
 
-        # Save results for report
-        matches_img_ratio_pil = Image.fromarray(cv2.cvtColor(matches_img_ratio, cv2.COLOR_BGR2RGB))
-        matches_img_ssd_pil.save("feature_matching_sift.png")
-        matches_img_ratio_pil.save("feature_matching_orb.png")
+        pair_name = self.selected_pair.get()
 
-        # Print performance metrics for report
+        # Save results
+        matches_img_pil = Image.fromarray(cv2.cvtColor(matches_img, cv2.COLOR_BGR2RGB))
+        matches_img_pil.save(f"./output/{pair_name}_feature_matching_{descriptor}.png")
+
+        # Performance metrics
         print(
-            f"SSD Matching: Number of Matches = {num_matches_ssd}, Matching Accuracy = {matching_accuracy_ssd:.2f}, Computational Time = {computational_time_ssd:.2f} s")
-        print(
-            f"Ratio Test Matching: Number of Matches = {num_matches_ratio}, Matching Accuracy = {matching_accuracy_ratio:.2f}, Computational Time = {computational_time_ratio:.2f} s")
+            f"{descriptor} Matching: Number of Matches = {len(matches)}, "
+            f"Matching Accuracy = {matching_accuracy:.2f}, Computational Time = {computational_time:.2f} s")
 
     def stitch_images(self):
+
         self.load_selected_pair()
         if len(self.image_processors) != 2:
             print("A valid image pair must contain exactly two images.")
@@ -225,54 +225,55 @@ class FeatureDetectionUI:
 
         processor1, processor2 = self.image_processors
 
-        # Resize images for processing speed and consistency
-        def resize_image(image, width):
-            aspect_ratio = width / float(image.shape[1])
-            dim = (width, int(image.shape[0] * aspect_ratio))
-            return cv2.resize(image, dim, interpolation=cv2.INTER_AREA)
+        processor1.gray_image = cv2.cvtColor(processor1.image, cv2.COLOR_BGR2GRAY)
+        processor2.gray_image = cv2.cvtColor(processor2.image, cv2.COLOR_BGR2GRAY)
 
-        processor1.image = resize_image(processor1.image, 600)
-        processor2.image = resize_image(processor2.image, 600)
+        keypoints1, descriptors1, _ = processor1.apply_sift_features(match=True)
+        keypoints2, descriptors2, _ = processor2.apply_sift_features(match=True)
 
-        # Apply SIFT and match features using SSD
-        keypoints1, descriptors1 = processor1.apply_sift_features()
-        keypoints2, descriptors2 = processor2.apply_sift_features()
-
-        # Use SSD or Ratio Test for matching as per your choice here
-        match_result = processor1.match_features_ssd(processor2)
+        # Match features
+        match_result = processor1.match_features(processor2)
         if not match_result:
             print("Feature matching did not return valid matches.")
             return
 
         matched_image, matches, matching_accuracy, computational_time = match_result
+        if not matches:
+            print("No matches to process.")
+            return
 
-        # Prepare for homography
-        src_pts = np.float32([keypoints1[m.queryIdx].pt for m in matches]).reshape(-1, 1, 2)
-        dst_pts = np.float32([keypoints2[m.trainIdx].pt for m in matches]).reshape(-1, 1, 2)
+        # Extract location of good matches
+        points1 = np.zeros((len(matches), 2), dtype=np.float32)
+        points2 = np.zeros((len(matches), 2), dtype=np.float32)
+
+        for i, match in enumerate(matches):
+            points1[i, :] = processor1.keypoints[match.queryIdx].pt
+            points2[i, :] = processor2.keypoints[match.trainIdx].pt
 
         # Compute homography matrix using RANSAC
-        H, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
+        H, _ = cv2.findHomography(points2, points1, cv2.RANSAC)
         if H is None:
             print("Homography could not be computed.")
             return
 
-        # Warp the second image
-        height1, width1 = processor1.image.shape[:2]
-        warped_image = cv2.warpPerspective(processor2.image, H, (width1 + processor2.image.shape[1], height1))
+        # Warp and stitch images
+        height, width, channels = processor1.image.shape
+        warped_image = cv2.warpPerspective(processor2.image, H, (width + processor2.image.shape[1], height))
+        stitched_image = np.copy(warped_image)
+        stitched_image[0:height, 0:width] = processor1.image
 
-        # Create the stitched output
-        stitched_image = np.zeros((max(height1, warped_image.shape[0]), width1 + warped_image.shape[1], 3),
-                                  dtype=np.uint8)
-        stitched_image[:height1, :width1] = processor1.image
-        for y in range(warped_image.shape[0]):
-            for x in range(warped_image.shape[1]):
-                if np.all(stitched_image[y, width1 + x] == 0):
-                    stitched_image[y, width1 + x] = warped_image[y, x]
-                else:
-                    stitched_image[y, width1 + x] = cv2.addWeighted(stitched_image[y, width1 + x], 0.5,
-                                                                    warped_image[y, x], 0.5, 0)
+        # Resize stitched image
+        display_width = 600
+        aspect_ratio = display_width / float(stitched_image.shape[1])
+        display_height = int(stitched_image.shape[0] * aspect_ratio)
+        resized_image = cv2.resize(stitched_image, (display_width, display_height), interpolation=cv2.INTER_AREA)
 
-        # Convert to PIL Image for display
-        stitched_image_pil = Image.fromarray(cv2.cvtColor(stitched_image, cv2.COLOR_BGR2RGB))
+        # Convert to PIL Image and display
+        stitched_image_pil = Image.fromarray(cv2.cvtColor(resized_image, cv2.COLOR_BGR2RGB))
+
+        pair_name = self.selected_pair.get()
+        stitched_image_pil.save(f"./output/{pair_name}_stitched.png")
+
         self.display_image(stitched_image_pil)
+
 
